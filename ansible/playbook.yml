@@ -1,0 +1,9 @@
+---
+- name: Configure local web stack
+  hosts: localhost
+  become: true
+  gather_facts: true
+
+  roles:
+    - web
+

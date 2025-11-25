@@ -1,0 +1,14 @@
+---
+app_env: dev
+project_name: php-app
+web_root: /var/www/html
+web_user: www-data
+web_group: www-data
+nginx_listen_port: 80
+php_fpm_version: "8.1"
+php_fpm_socket: "/run/php/php{{ php_fpm_version }}-fpm.sock"
+php_fpm_service: "php{{ php_fpm_version }}-fpm"
+web_packages:
+  - nginx
+  - php-fpm
+

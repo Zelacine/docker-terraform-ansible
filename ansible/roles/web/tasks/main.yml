@@ -1,0 +1,57 @@
+---
+- name: Update apt cache
+  apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_pkg_mgr == "apt"
+
+- name: Install web stack packages
+  package:
+    name: "{{ web_packages }}"
+    state: present
+
+- name: Ensure document root exists
+  file:
+    path: "{{ web_root }}"
+    state: directory
+    owner: "{{ web_user }}"
+    group: "{{ web_group }}"
+    mode: "0755"
+
+- name: Deploy Nginx configuration
+  template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/sites-available/default
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart nginx
+
+- name: Deploy application index.php
+  template:
+    src: index.php.j2
+    dest: "{{ web_root }}/index.php"
+    owner: "{{ web_user }}"
+    group: "{{ web_group }}"
+    mode: "0644"
+
+- name: Configure logrotate for Nginx
+  template:
+    src: logrotate-nginx.j2
+    dest: /etc/logrotate.d/nginx
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Ensure php-fpm service is enabled and running
+  service:
+    name: "{{ php_fpm_service }}"
+    state: started
+    enabled: true
+
+- name: Ensure nginx service is enabled and running
+  service:
+    name: nginx
+    state: started
+    enabled: true
+

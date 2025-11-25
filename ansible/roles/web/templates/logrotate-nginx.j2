@@ -1,0 +1,14 @@
+/var/log/nginx/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    sharedscripts
+    create 0640 {{ web_user }} adm
+    postrotate
+        systemctl reload nginx >/dev/null 2>&1 || true
+    endscript
+}
+
