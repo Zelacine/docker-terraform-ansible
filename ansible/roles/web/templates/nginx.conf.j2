@@ -1,8 +1,8 @@
 server {
-    listen {{ nginx_listen_port }};
+    listen {{ web_nginx_listen_port }};
     server_name _;
 
-    root {{ php_web_root }};
+    root {{ web_php_web_root }};
     index index.php index.html;
 
     access_log /var/log/nginx/access.log;
@@ -10,7 +10,7 @@ server {
 
     location /healthz {
         default_type application/json;
-        return 200 '{"status":"ok","service":"nginx","env":"{{ app_env }}"}';
+        return 200 '{"status":"ok","service":"nginx","env":"{{ web_app_env }}"}';
     }
 
     location / {
@@ -21,9 +21,9 @@ server {
         include fastcgi_params;
         fastcgi_split_path_info ^(.+\.php)(/.+)$;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        fastcgi_param APP_ENV "{{ app_env }}";
+        fastcgi_param APP_ENV "{{ web_app_env }}";
         fastcgi_index index.php;
-        fastcgi_pass {{ php_fpm_upstream }};
+        fastcgi_pass {{ web_php_fpm_upstream }};
     }
 
     location ~ /\.ht {

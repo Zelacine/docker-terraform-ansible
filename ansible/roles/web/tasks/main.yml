@@ -1,110 +1,108 @@
 ---
-- name: Ensure nginx container exists
+- name: Ensure Nginx Container Exists
   community.docker.docker_container_info:
-    name: "{{ nginx_container_name }}"
-  register: nginx_info
+    name: "{{ web_nginx_container_name }}"
+  register: web_nginx_info
 
-- name: Ensure php-fpm container exists
+- name: Ensure PHP-FPM Container Exists
   community.docker.docker_container_info:
-    name: "{{ php_fpm_container_name }}"
-  register: php_info
+    name: "{{ web_php_fpm_container_name }}"
+  register: web_php_info
 
 - name: Fail if required containers are missing
   ansible.builtin.fail:
     msg: >-
-      One or more containers ({{ nginx_container_name }}, {{ php_fpm_container_name }}) were
+      One or more containers ({{ web_nginx_container_name }}, {{ web_php_fpm_container_name }}) were
       not found. Make sure Terraform has created them.
-  when: not (nginx_info.exists and php_info.exists)
+  when: not (web_nginx_info.exists and web_php_info.exists)
 
 - name: Ensure temporary render directory exists
   ansible.builtin.file:
-    path: "{{ temp_render_dir }}"
+    path: "{{ web_temp_render_dir }}"
     state: directory
     mode: "0700"
 
 - name: Deploy nginx configuration on host
   ansible.builtin.template:
     src: nginx.conf.j2
-    dest: "{{ nginx_conf_host_path }}"
+    dest: "{{ web_nginx_conf_host_path }}"
     mode: "0644"
-  register: rendered_nginx
-  notify: restart nginx container
+  register: web_rendered_nginx
+  notify: Restart Nginx Container
 
 - name: Render application index locally
   ansible.builtin.template:
     src: index.php.j2
-    dest: "{{ temp_render_dir }}/index.php"
+    dest: "{{ web_temp_render_dir }}/index.php"
     mode: "0600"
-  register: rendered_index
+  register: web_rendered_index
 
 - name: Render logrotate configuration locally
   ansible.builtin.template:
     src: logrotate-nginx.j2
-    dest: "{{ temp_render_dir }}/logrotate-nginx"
+    dest: "{{ web_temp_render_dir }}/logrotate-nginx"
     mode: "0600"
-  register: rendered_logrotate
+  register: web_rendered_logrotate
 
 - name: Ensure php web root exists in container
   community.docker.docker_container_exec:
-    container: "{{ php_fpm_container_name }}"
-    command: "mkdir -p {{ php_web_root }}"
+    container: "{{ web_php_fpm_container_name }}"
+    command: "mkdir -p {{ web_php_web_root }}"
   changed_when: false
-
-## removed copy/move tasks; host file handles volume
 
 - name: Copy logrotate configuration into container staging path
   ansible.builtin.command:
     cmd: >
-      docker cp {{ temp_render_dir }}/logrotate-nginx
-      {{ nginx_container_name }}:{{ logrotate_temp_path }}
-  when: rendered_logrotate is defined
-  changed_when: rendered_logrotate is changed
+      docker cp {{ web_temp_render_dir }}/logrotate-nginx
+      {{ web_nginx_container_name }}:{{ web_logrotate_temp_path }}
+  when: web_rendered_logrotate is defined
+  changed_when: web_rendered_logrotate is changed
 
 - name: Move logrotate configuration into place
   community.docker.docker_container_exec:
-    container: "{{ nginx_container_name }}"
+    container: "{{ web_nginx_container_name }}"
     command: >
-      sh -c "cat {{ logrotate_temp_path }} > {{ logrotate_path }}
-      && rm -f {{ logrotate_temp_path }}"
-  when: rendered_logrotate is defined
-  changed_when: rendered_logrotate is changed
-  notify: restart nginx container
+      sh -c "cat {{ web_logrotate_temp_path }} > {{ web_logrotate_path }}
+      && rm -f {{ web_logrotate_temp_path }}"
+  when: web_rendered_logrotate is defined
+  changed_when: web_rendered_logrotate is changed
+  notify: Restart Nginx Container
 
 - name: Copy application index.php into php-fpm container staging path
   ansible.builtin.command:
     cmd: >
-      docker cp {{ temp_render_dir }}/index.php
-      {{ php_fpm_container_name }}:{{ php_temp_index_path }}
-  when: rendered_index is defined
-  changed_when: rendered_index is changed
+      docker cp {{ web_temp_render_dir }}/index.php
+      {{ web_php_fpm_container_name }}:{{ web_php_temp_index_path }}
+  when: web_rendered_index is defined
+  changed_when: web_rendered_index is changed
 
 - name: Move application index.php into place
   community.docker.docker_container_exec:
-    container: "{{ php_fpm_container_name }}"
+    container: "{{ web_php_fpm_container_name }}"
     command: >
-      sh -c "cat {{ php_temp_index_path }} > {{ php_web_root }}/index.php
-      && rm -f {{ php_temp_index_path }}"
-  when: rendered_index is defined
-  changed_when: rendered_index is changed
+      sh -c "cat {{ web_php_temp_index_path }} > {{ web_php_web_root }}/index.php
+      && rm -f {{ web_php_temp_index_path }}"
+  when: web_rendered_index is defined
+  changed_when: web_rendered_index is changed
   notify:
-    - restart php-fpm container
-    - restart nginx container
+    - Restart PHP-FPM Container
+    - Restart Nginx Container
 
 - name: Ensure index ownership inside php container
   community.docker.docker_container_exec:
-    container: "{{ php_fpm_container_name }}"
+    container: "{{ web_php_fpm_container_name }}"
     command: >
-      sh -c "if [ -f {{ php_web_root }}/index.php ];
-      then chown {{ container_web_user }}:{{ container_web_user }} {{ php_web_root }}/index.php; fi"
+      sh -c "if [ -f {{ web_php_web_root }}/index.php ];
+      then chown {{ web_container_user }}:{{ web_container_user }} {{ web_php_web_root }}/index.php; fi"
   changed_when: false
 
 - name: Check nginx configuration
   community.docker.docker_container_exec:
-    container: "{{ nginx_container_name }}"
+    container: "{{ web_nginx_container_name }}"
     command: "nginx -t"
-  register: nginx_test
+  register: web_nginx_test
   changed_when: false
 
 - name: Display nginx test output
   ansible.builtin.debug:
-    msg: "{{ nginx_test.stdout }}"
+    msg: "{{ web_nginx_test.stdout }}"

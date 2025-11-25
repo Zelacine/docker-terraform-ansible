@@ -6,7 +6,7 @@
     delaycompress
     notifempty
     sharedscripts
-    create 0640 {{ container_web_user }} {{ container_log_group }}
+    create 0640 {{ web_container_user }} {{ web_container_log_group }}
     postrotate
         nginx -s reopen >/dev/null 2>&1 || true
     endscript

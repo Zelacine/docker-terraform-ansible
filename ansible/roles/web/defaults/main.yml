@@ -1,18 +1,17 @@
 ---
-app_env: dev
-project_name: php-app
-project_root: "{{ playbook_dir | dirname }}"
-nginx_conf_host_path: "{{ project_root }}/terraform/nginx.conf"
-nginx_container_name: "{{ project_name }}-nginx"
-php_fpm_container_name: "{{ project_name }}-php-fpm"
-nginx_conf_path: /etc/nginx/conf.d/default.conf
-php_web_root: /var/www/html
-logrotate_path: /etc/logrotate.d/nginx
-container_web_user: www-data
-container_log_group: adm
-temp_render_dir: "/tmp/{{ project_name }}-ansible"
-nginx_listen_port: 80
-php_fpm_upstream: "{{ php_fpm_container_name }}:9000"
-logrotate_temp_path: /tmp/logrotate-nginx
-php_temp_index_path: /tmp/index.php
-
+web_app_env: dev
+web_project_name: php-app
+web_project_root: "{{ playbook_dir | dirname }}"
+web_nginx_conf_host_path: "{{ web_project_root }}/terraform/nginx.conf"
+web_nginx_container_name: "{{ web_project_name }}-nginx"
+web_php_fpm_container_name: "{{ web_project_name }}-php-fpm"
+web_nginx_conf_path: /etc/nginx/conf.d/default.conf
+web_php_web_root: /var/www/html
+web_logrotate_path: /etc/logrotate.d/nginx
+web_container_user: www-data
+web_container_log_group: adm
+web_temp_render_dir: "/tmp/{{ web_project_name }}-ansible"
+web_nginx_listen_port: 80
+web_php_fpm_upstream: "{{ web_php_fpm_container_name }}:9000"
+web_logrotate_temp_path: /tmp/logrotate-nginx
+web_php_temp_index_path: /tmp/index.php
