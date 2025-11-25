@@ -22,12 +22,13 @@
     state: directory
     mode: "0700"
 
-- name: Render nginx configuration locally
+- name: Deploy nginx configuration on host
   ansible.builtin.template:
     src: nginx.conf.j2
-    dest: "{{ temp_render_dir }}/nginx.conf"
-    mode: "0600"
+    dest: "{{ nginx_conf_host_path }}"
+    mode: "0644"
   register: rendered_nginx
+  notify: restart nginx container
 
 - name: Render application index locally
   ansible.builtin.template:
@@ -49,32 +50,24 @@
     command: "mkdir -p {{ php_web_root }}"
   changed_when: false
 
-- name: Copy nginx configuration into container staging path
-  ansible.builtin.command:
-    cmd: >
-      docker cp {{ temp_render_dir }}/nginx.conf
-      {{ nginx_container_name }}:{{ nginx_temp_conf_path }}
-  when: rendered_nginx is changed
-
-- name: Move nginx configuration into place
-  community.docker.docker_container_exec:
-    container: "{{ nginx_container_name }}"
-    command: "mv {{ nginx_temp_conf_path }} {{ nginx_conf_path }}"
-  when: rendered_nginx is changed
-  notify: restart nginx container
+## removed copy/move tasks; host file handles volume
 
 - name: Copy logrotate configuration into container staging path
   ansible.builtin.command:
     cmd: >
       docker cp {{ temp_render_dir }}/logrotate-nginx
       {{ nginx_container_name }}:{{ logrotate_temp_path }}
-  when: rendered_logrotate is changed
+  when: rendered_logrotate is defined
+  changed_when: rendered_logrotate is changed
 
 - name: Move logrotate configuration into place
   community.docker.docker_container_exec:
     container: "{{ nginx_container_name }}"
-    command: "mv {{ logrotate_temp_path }} {{ logrotate_path }}"
-  when: rendered_logrotate is changed
+    command: >
+      sh -c "cat {{ logrotate_temp_path }} > {{ logrotate_path }}
+      && rm -f {{ logrotate_temp_path }}"
+  when: rendered_logrotate is defined
+  changed_when: rendered_logrotate is changed
   notify: restart nginx container
 
 - name: Copy application index.php into php-fpm container staging path
@@ -82,13 +75,17 @@
     cmd: >
       docker cp {{ temp_render_dir }}/index.php
       {{ php_fpm_container_name }}:{{ php_temp_index_path }}
-  when: rendered_index is changed
+  when: rendered_index is defined
+  changed_when: rendered_index is changed
 
 - name: Move application index.php into place
   community.docker.docker_container_exec:
     container: "{{ php_fpm_container_name }}"
-    command: "mv {{ php_temp_index_path }} {{ php_web_root }}/index.php"
-  when: rendered_index is changed
+    command: >
+      sh -c "cat {{ php_temp_index_path }} > {{ php_web_root }}/index.php
+      && rm -f {{ php_temp_index_path }}"
+  when: rendered_index is defined
+  changed_when: rendered_index is changed
   notify:
     - restart php-fpm container
     - restart nginx container
