@@ -1,0 +1,40 @@
+name: Ansible CI
+
+on:
+  push:
+    paths:
+      - 'ansible/**'
+      - '.github/workflows/ansible.yml'
+  pull_request:
+    paths:
+      - 'ansible/**'
+      - '.github/workflows/ansible.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ansible-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ansible
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Ansible tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible ansible-lint
+          ansible-galaxy collection install community.docker
+
+      - name: Run ansible-lint
+        run: ansible-lint
+
