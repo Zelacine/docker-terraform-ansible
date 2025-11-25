@@ -11,4 +11,7 @@ container_log_group: adm
 temp_render_dir: "/tmp/{{ project_name }}-ansible"
 nginx_listen_port: 80
 php_fpm_upstream: "{{ php_fpm_container_name }}:9000"
+nginx_temp_conf_path: /tmp/nginx.conf
+logrotate_temp_path: /tmp/logrotate-nginx
+php_temp_index_path: /tmp/index.php
 

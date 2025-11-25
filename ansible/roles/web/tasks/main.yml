@@ -43,27 +43,45 @@
     mode: "0600"
   register: rendered_logrotate
 
-- name: Push nginx configuration into container
-  community.docker.docker_container_copy:
-    name: "{{ nginx_container_name }}"
-    src: "{{ temp_render_dir }}/nginx.conf"
-    dest_path: "{{ nginx_conf_path }}"
+- name: Copy nginx configuration into container staging path
+  ansible.builtin.command:
+    cmd: >
+      docker cp {{ temp_render_dir }}/nginx.conf
+      {{ nginx_container_name }}:{{ nginx_temp_conf_path }}
+  when: rendered_nginx is changed
+
+- name: Move nginx configuration into place
+  community.docker.docker_container_exec:
+    container: "{{ nginx_container_name }}"
+    command: "mv {{ nginx_temp_conf_path }} {{ nginx_conf_path }}"
   when: rendered_nginx is changed
   notify: restart nginx container
 
-- name: Push logrotate configuration into container
-  community.docker.docker_container_copy:
-    name: "{{ nginx_container_name }}"
-    src: "{{ temp_render_dir }}/logrotate-nginx"
-    dest_path: "{{ logrotate_path }}"
+- name: Copy logrotate configuration into container staging path
+  ansible.builtin.command:
+    cmd: >
+      docker cp {{ temp_render_dir }}/logrotate-nginx
+      {{ nginx_container_name }}:{{ logrotate_temp_path }}
+  when: rendered_logrotate is changed
+
+- name: Move logrotate configuration into place
+  community.docker.docker_container_exec:
+    container: "{{ nginx_container_name }}"
+    command: "mv {{ logrotate_temp_path }} {{ logrotate_path }}"
   when: rendered_logrotate is changed
   notify: restart nginx container
 
-- name: Push application index.php into php-fpm container
-  community.docker.docker_container_copy:
-    name: "{{ php_fpm_container_name }}"
-    src: "{{ temp_render_dir }}/index.php"
-    dest_path: "{{ php_web_root }}/index.php"
+- name: Copy application index.php into php-fpm container staging path
+  ansible.builtin.command:
+    cmd: >
+      docker cp {{ temp_render_dir }}/index.php
+      {{ php_fpm_container_name }}:{{ php_temp_index_path }}
+  when: rendered_index is changed
+
+- name: Move application index.php into place
+  community.docker.docker_container_exec:
+    container: "{{ php_fpm_container_name }}"
+    command: "mv {{ php_temp_index_path }} {{ php_web_root }}/index.php"
   when: rendered_index is changed
   notify:
     - restart php-fpm container

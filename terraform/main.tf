@@ -44,7 +44,7 @@ module "nginx" {
   host_port       = var.host_port
   app_env         = var.app_env
   php_fpm_name    = module.php_fpm.container_name
-  nginx_conf_path = "${path.root}/nginx.conf"
+  nginx_conf_path = abspath("${path.root}/nginx.conf")
   
   providers = {
     docker = docker
