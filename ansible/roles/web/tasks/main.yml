@@ -37,6 +37,13 @@
     mode: "0600"
   register: web_rendered_index
 
+- name: Render healthz.php locally
+  ansible.builtin.template:
+    src: healthz.php.j2
+    dest: "{{ web_temp_render_dir }}/healthz.php"
+    mode: "0600"
+  register: web_rendered_healthz
+
 - name: Render logrotate configuration locally
   ansible.builtin.template:
     src: logrotate-nginx.j2
@@ -88,12 +95,34 @@
     - Restart PHP-FPM Container
     - Restart Nginx Container
 
+- name: Copy healthz.php into php-fpm container staging path
+  ansible.builtin.command:
+    cmd: >
+      docker cp {{ web_temp_render_dir }}/healthz.php
+      {{ web_php_fpm_container_name }}:{{ web_php_temp_index_path }}
+  when: web_rendered_healthz is defined
+  changed_when: web_rendered_healthz is changed
+
+- name: Move healthz.php into place
+  community.docker.docker_container_exec:
+    container: "{{ web_php_fpm_container_name }}"
+    command: >
+      sh -c "cat {{ web_php_temp_index_path }} > {{ web_php_web_root }}/healthz.php
+      && rm -f {{ web_php_temp_index_path }}"
+  when: web_rendered_healthz is defined
+  changed_when: web_rendered_healthz is changed
+  notify:
+    - Restart PHP-FPM Container
+    - Restart Nginx Container
+
 - name: Ensure index ownership inside php container
   community.docker.docker_container_exec:
     container: "{{ web_php_fpm_container_name }}"
     command: >
       sh -c "if [ -f {{ web_php_web_root }}/index.php ];
-      then chown {{ web_container_user }}:{{ web_container_user }} {{ web_php_web_root }}/index.php; fi"
+      then chown {{ web_container_user }}:{{ web_container_user }} {{ web_php_web_root }}/index.php; fi
+      && if [ -f {{ web_php_web_root }}/healthz.php ];
+      then chown {{ web_container_user }}:{{ web_container_user }} {{ web_php_web_root }}/healthz.php; fi"
   changed_when: false
 
 - name: Check nginx configuration

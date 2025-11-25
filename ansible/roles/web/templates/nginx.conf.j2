@@ -13,6 +13,13 @@ server {
         return 200 '{"status":"ok","service":"nginx","env":"{{ web_app_env }}"}';
     }
 
+    location = /healthz-php {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME {{ web_php_web_root }}/healthz.php;
+        fastcgi_pass {{ web_php_fpm_upstream }};
+        access_log off;
+    }
+
     location / {
         try_files $uri /index.php$is_args$args;
     }
