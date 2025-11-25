@@ -43,6 +43,12 @@
     mode: "0600"
   register: rendered_logrotate
 
+- name: Ensure php web root exists in container
+  community.docker.docker_container_exec:
+    container: "{{ php_fpm_container_name }}"
+    command: "mkdir -p {{ php_web_root }}"
+  changed_when: false
+
 - name: Copy nginx configuration into container staging path
   ansible.builtin.command:
     cmd: >
@@ -90,7 +96,9 @@
 - name: Ensure index ownership inside php container
   community.docker.docker_container_exec:
     container: "{{ php_fpm_container_name }}"
-    command: "chown {{ container_web_user }}:{{ container_web_user }} {{ php_web_root }}/index.php"
+    command: >
+      sh -c "if [ -f {{ php_web_root }}/index.php ];
+      then chown {{ container_web_user }}:{{ container_web_user }} {{ php_web_root }}/index.php; fi"
   changed_when: false
 
 - name: Check nginx configuration
