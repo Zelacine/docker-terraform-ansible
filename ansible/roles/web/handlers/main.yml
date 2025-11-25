@@ -1,11 +1,13 @@
 ---
-- name: restart nginx
-  service:
-    name: nginx
-    state: restarted
+- name: restart nginx container
+  community.docker.docker_container:
+    name: "{{ nginx_container_name }}"
+    state: started
+    restart: true
 
-- name: restart php-fpm
-  service:
-    name: "{{ php_fpm_service }}"
-    state: restarted
+- name: restart php-fpm container
+  community.docker.docker_container:
+    name: "{{ php_fpm_container_name }}"
+    state: started
+    restart: true
 

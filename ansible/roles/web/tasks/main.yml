@@ -1,57 +1,87 @@
 ---
-- name: Update apt cache
-  apt:
-    update_cache: true
-    cache_valid_time: 3600
-  when: ansible_pkg_mgr == "apt"
+- name: Ensure nginx container exists
+  community.docker.docker_container_info:
+    name: "{{ nginx_container_name }}"
+  register: nginx_info
 
-- name: Install web stack packages
-  package:
-    name: "{{ web_packages }}"
-    state: present
+- name: Ensure php-fpm container exists
+  community.docker.docker_container_info:
+    name: "{{ php_fpm_container_name }}"
+  register: php_info
 
-- name: Ensure document root exists
-  file:
-    path: "{{ web_root }}"
+- name: Fail if required containers are missing
+  ansible.builtin.fail:
+    msg: >-
+      One or more containers ({{ nginx_container_name }}, {{ php_fpm_container_name }}) were
+      not found. Make sure Terraform has created them.
+  when: not (nginx_info.exists and php_info.exists)
+
+- name: Ensure temporary render directory exists
+  ansible.builtin.file:
+    path: "{{ temp_render_dir }}"
     state: directory
-    owner: "{{ web_user }}"
-    group: "{{ web_group }}"
-    mode: "0755"
+    mode: "0700"
 
-- name: Deploy Nginx configuration
-  template:
+- name: Render nginx configuration locally
+  ansible.builtin.template:
     src: nginx.conf.j2
-    dest: /etc/nginx/sites-available/default
-    owner: root
-    group: root
-    mode: "0644"
-  notify: restart nginx
+    dest: "{{ temp_render_dir }}/nginx.conf"
+    mode: "0600"
+  register: rendered_nginx
 
-- name: Deploy application index.php
-  template:
+- name: Render application index locally
+  ansible.builtin.template:
     src: index.php.j2
-    dest: "{{ web_root }}/index.php"
-    owner: "{{ web_user }}"
-    group: "{{ web_group }}"
-    mode: "0644"
+    dest: "{{ temp_render_dir }}/index.php"
+    mode: "0600"
+  register: rendered_index
 
-- name: Configure logrotate for Nginx
-  template:
+- name: Render logrotate configuration locally
+  ansible.builtin.template:
     src: logrotate-nginx.j2
-    dest: /etc/logrotate.d/nginx
-    owner: root
-    group: root
-    mode: "0644"
+    dest: "{{ temp_render_dir }}/logrotate-nginx"
+    mode: "0600"
+  register: rendered_logrotate
 
-- name: Ensure php-fpm service is enabled and running
-  service:
-    name: "{{ php_fpm_service }}"
-    state: started
-    enabled: true
+- name: Push nginx configuration into container
+  community.docker.docker_container_copy:
+    name: "{{ nginx_container_name }}"
+    src: "{{ temp_render_dir }}/nginx.conf"
+    dest_path: "{{ nginx_conf_path }}"
+  when: rendered_nginx is changed
+  notify: restart nginx container
 
-- name: Ensure nginx service is enabled and running
-  service:
-    name: nginx
-    state: started
-    enabled: true
+- name: Push logrotate configuration into container
+  community.docker.docker_container_copy:
+    name: "{{ nginx_container_name }}"
+    src: "{{ temp_render_dir }}/logrotate-nginx"
+    dest_path: "{{ logrotate_path }}"
+  when: rendered_logrotate is changed
+  notify: restart nginx container
 
+- name: Push application index.php into php-fpm container
+  community.docker.docker_container_copy:
+    name: "{{ php_fpm_container_name }}"
+    src: "{{ temp_render_dir }}/index.php"
+    dest_path: "{{ php_web_root }}/index.php"
+  when: rendered_index is changed
+  notify:
+    - restart php-fpm container
+    - restart nginx container
+
+- name: Ensure index ownership inside php container
+  community.docker.docker_container_exec:
+    container: "{{ php_fpm_container_name }}"
+    command: "chown {{ container_web_user }}:{{ container_web_user }} {{ php_web_root }}/index.php"
+  changed_when: false
+
+- name: Check nginx configuration
+  community.docker.docker_container_exec:
+    container: "{{ nginx_container_name }}"
+    command: "nginx -t"
+  register: nginx_test
+  changed_when: false
+
+- name: Display nginx test output
+  ansible.builtin.debug:
+    msg: "{{ nginx_test.stdout }}"
