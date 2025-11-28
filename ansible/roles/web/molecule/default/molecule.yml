@@ -1,0 +1,29 @@
+---
+dependency:
+  name: galaxy
+driver:
+  name: docker
+platforms:
+  - name: instance
+    image: docker:dind
+    privileged: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: dockerd-entrypoint.sh
+    pre_build_image: true
+provisioner:
+  name: ansible
+  inventory:
+    host_vars:
+      instance:
+        ansible_connection: docker
+        ansible_user: root
+  playbook: converge.yml
+  config_options:
+    defaults:
+      remote_user: root
+verifier:
+  name: testinfra
+  options:
+    v: 1
+

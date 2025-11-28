@@ -1,0 +1,80 @@
+---
+- name: Converge
+  hosts: all
+  gather_facts: true
+  become: true
+  vars:
+    web_project_name: php-app-test
+    web_app_env: test
+    web_project_root: /tmp/test-project
+    web_nginx_conf_host_path: /tmp/test-project/nginx.conf
+  pre_tasks:
+    - name: Install Docker CLI in test container
+      apk:
+        name: docker-cli
+        state: present
+      when: ansible_os_family == "Alpine"
+
+    - name: Create test project directory
+      file:
+        path: "{{ web_project_root }}"
+        state: directory
+
+    - name: Create test nginx.conf placeholder
+      copy:
+        content: "# Placeholder\n"
+        dest: "{{ web_nginx_conf_host_path }}"
+        mode: "0644"
+
+    - name: Create test Docker network
+      command: >
+        docker network create {{ web_project_name }}-network
+      failed_when: false
+      changed_when: false
+
+    - name: Create test Docker volume
+      command: >
+        docker volume create {{ web_project_name }}-volume
+      failed_when: false
+      changed_when: false
+
+    - name: Start nginx test container
+      command: >
+        docker run -d
+        --name {{ web_project_name }}-nginx
+        --network {{ web_project_name }}-network
+        -v {{ web_project_name }}-volume:/var/www/html:ro
+        -v {{ web_nginx_conf_host_path }}:/etc/nginx/conf.d/default.conf:ro
+        -p 8080:80
+        nginx:alpine
+      register: nginx_container
+      changed_when: nginx_container.rc == 0
+
+    - name: Start php-fpm test container
+      command: >
+        docker run -d
+        --name {{ web_project_name }}-php-fpm
+        --network {{ web_project_name }}-network
+        -v {{ web_project_name }}-volume:/var/www/html
+        -e APP_ENV={{ web_app_env }}
+        php:8.1-fpm-alpine
+      register: php_container
+      changed_when: php_container.rc == 0
+
+    - name: Wait for containers to be ready
+      wait_for:
+        timeout: 10
+
+  roles:
+    - role: web
+
+  post_tasks:
+    - name: Display container status
+      command: docker ps --filter "name={{ web_project_name }}"
+      register: container_status
+      changed_when: false
+
+    - name: Show container status
+      debug:
+        var: container_status.stdout_lines
+

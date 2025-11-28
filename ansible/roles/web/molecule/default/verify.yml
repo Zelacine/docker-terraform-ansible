@@ -1,0 +1,80 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: true
+  become: true
+  vars:
+    web_project_name: php-app-test
+    web_nginx_container_name: "{{ web_project_name }}-nginx"
+    web_php_fpm_container_name: "{{ web_project_name }}-php-fpm"
+    web_nginx_conf_host_path: /tmp/test-project/nginx.conf
+    web_php_web_root: /var/www/html
+
+  tasks:
+    - name: Verify nginx container is running
+      command: docker ps --filter "name={{ web_nginx_container_name }}" --format "{{ '{{' }}.Status{{ '}}' }}"
+      register: nginx_status
+      changed_when: false
+      failed_when: "'Up' not in nginx_status.stdout"
+
+    - name: Verify php-fpm container is running
+      command: docker ps --filter "name={{ web_php_fpm_container_name }}" --format "{{ '{{' }}.Status{{ '}}' }}"
+      register: php_status
+      changed_when: false
+      failed_when: "'Up' not in php_status.stdout"
+
+    - name: Verify nginx configuration file exists on host
+      stat:
+        path: "{{ web_nginx_conf_host_path }}"
+      register: nginx_conf_stat
+      failed_when: not nginx_conf_stat.stat.exists
+
+    - name: Verify nginx configuration is valid
+      command: docker exec {{ web_nginx_container_name }} nginx -t
+      register: nginx_test
+      changed_when: false
+      failed_when: nginx_test.rc != 0
+
+    - name: Verify nginx configuration contains healthz endpoint
+      command: grep -q "location /healthz" {{ web_nginx_conf_host_path }}
+      changed_when: false
+      failed_when: false
+
+    - name: Verify nginx configuration contains healthz-php endpoint
+      command: grep -q "location = /healthz-php" {{ web_nginx_conf_host_path }}
+      changed_when: false
+      failed_when: false
+
+    - name: Verify index.php exists in php-fpm container
+      command: docker exec {{ web_php_fpm_container_name }} test -f {{ web_php_web_root }}/index.php
+      changed_when: false
+      failed_when: false
+
+    - name: Verify healthz.php exists in php-fpm container
+      command: docker exec {{ web_php_fpm_container_name }} test -f {{ web_php_web_root }}/healthz.php
+      changed_when: false
+      failed_when: false
+
+    - name: Verify /healthz endpoint returns 200
+      uri:
+        url: http://localhost:8080/healthz
+        method: GET
+        status_code: 200
+      register: healthz_response
+      changed_when: false
+      failed_when: "'nginx' not in healthz_response.json.service"
+
+    - name: Verify /healthz-php endpoint returns 200
+      uri:
+        url: http://localhost:8080/healthz-php
+        method: GET
+        status_code: 200
+      register: healthz_php_response
+      changed_when: false
+      failed_when: "'php-fpm' not in healthz_php_response.json.service"
+
+    - name: Verify logrotate configuration exists
+      command: docker exec {{ web_nginx_container_name }} test -f /etc/logrotate.d/nginx
+      changed_when: false
+      failed_when: false
+
