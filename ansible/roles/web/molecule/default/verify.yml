@@ -7,8 +7,9 @@
     web_project_name: php-app-test
     web_nginx_container_name: "{{ web_project_name }}-nginx"
     web_php_fpm_container_name: "{{ web_project_name }}-php-fpm"
-    web_nginx_conf_host_path: /tmp/test-project/nginx.conf
     web_php_web_root: /var/www/html
+    web_nginx_conf_path: /etc/nginx/conf.d/default.conf
+    web_php_pm: dynamic
 
   tasks:
     - name: Verify nginx container is running
@@ -23,12 +24,6 @@
       changed_when: false
       failed_when: "'Up' not in php_status.stdout"
 
-    - name: Verify nginx configuration file exists on host
-      stat:
-        path: "{{ web_nginx_conf_host_path }}"
-      register: nginx_conf_stat
-      failed_when: not nginx_conf_stat.stat.exists
-
     - name: Verify nginx configuration is valid
       command: docker exec {{ web_nginx_container_name }} nginx -t
       register: nginx_test
@@ -36,14 +31,12 @@
       failed_when: nginx_test.rc != 0
 
     - name: Verify nginx configuration contains healthz endpoint
-      command: grep -q "location /healthz" {{ web_nginx_conf_host_path }}
+      command: docker exec {{ web_nginx_container_name }} sh -c "grep -q 'location /healthz' {{ web_nginx_conf_path }}"
       changed_when: false
-      failed_when: false
 
     - name: Verify nginx configuration contains healthz-php endpoint
-      command: grep -q "location = /healthz-php" {{ web_nginx_conf_host_path }}
+      command: docker exec {{ web_nginx_container_name }} sh -c "grep -q 'location = /healthz-php' {{ web_nginx_conf_path }}"
       changed_when: false
-      failed_when: false
 
     - name: Verify index.php exists in php-fpm container
       command: docker exec {{ web_php_fpm_container_name }} test -f {{ web_php_web_root }}/index.php
@@ -76,5 +69,12 @@
     - name: Verify logrotate configuration exists
       command: docker exec {{ web_nginx_container_name }} test -f /etc/logrotate.d/nginx
       changed_when: false
-      failed_when: false
+
+    - name: Verify PHP-FPM pool configuration contains correct mode
+      command: docker exec {{ web_php_fpm_container_name }} sh -c "grep -q 'pm = {{ web_php_pm | default('dynamic') }}' /usr/local/etc/php-fpm.d/www.conf"
+      changed_when: false
+
+    - name: Verify PHP-FPM pool exports APP_ENV
+      command: docker exec {{ web_php_fpm_container_name }} sh -c "grep -q 'env\\[APP_ENV\\]' /usr/local/etc/php-fpm.d/www.conf"
+      changed_when: false
 

@@ -22,12 +22,29 @@
     state: directory
     mode: "0700"
 
-- name: Deploy nginx configuration on host
+- name: Render nginx configuration locally
   ansible.builtin.template:
     src: nginx.conf.j2
-    dest: "{{ web_nginx_conf_host_path }}"
-    mode: "0644"
+    dest: "{{ web_temp_render_dir }}/nginx.conf"
+    mode: "0600"
   register: web_rendered_nginx
+
+- name: Copy nginx configuration into container staging path
+  ansible.builtin.command:
+    cmd: >
+      docker cp {{ web_temp_render_dir }}/nginx.conf
+      {{ web_nginx_container_name }}:{{ web_nginx_temp_conf_path }}
+  when: web_rendered_nginx is defined
+  changed_when: web_rendered_nginx is changed
+
+- name: Move nginx configuration into place
+  community.docker.docker_container_exec:
+    container: "{{ web_nginx_container_name }}"
+    command: >
+      sh -c "cat {{ web_nginx_temp_conf_path }} > {{ web_nginx_conf_path }}
+      && rm -f {{ web_nginx_temp_conf_path }}"
+  when: web_rendered_nginx is defined
+  changed_when: web_rendered_nginx is changed
   notify: Restart Nginx Container
 
 - name: Render application index locally
@@ -50,6 +67,13 @@
     dest: "{{ web_temp_render_dir }}/logrotate-nginx"
     mode: "0600"
   register: web_rendered_logrotate
+
+- name: Render PHP-FPM pool configuration locally
+  ansible.builtin.template:
+    src: php-fpm-pool.conf.j2
+    dest: "{{ web_temp_render_dir }}/php-fpm-www.conf"
+    mode: "0600"
+  register: web_rendered_php_pool
 
 - name: Ensure php web root exists in container
   community.docker.docker_container_exec:
@@ -115,6 +139,24 @@
     - Restart PHP-FPM Container
     - Restart Nginx Container
 
+- name: Copy PHP-FPM pool configuration into container staging path
+  ansible.builtin.command:
+    cmd: >
+      docker cp {{ web_temp_render_dir }}/php-fpm-www.conf
+      {{ web_php_fpm_container_name }}:{{ web_php_pool_temp_path }}
+  when: web_rendered_php_pool is defined
+  changed_when: web_rendered_php_pool is changed
+
+- name: Move PHP-FPM pool configuration into place
+  community.docker.docker_container_exec:
+    container: "{{ web_php_fpm_container_name }}"
+    command: >
+      sh -c "cat {{ web_php_pool_temp_path }} > {{ web_php_fpm_pool_path }}
+      && rm -f {{ web_php_pool_temp_path }}"
+  when: web_rendered_php_pool is defined
+  changed_when: web_rendered_php_pool is changed
+  notify: Restart PHP-FPM Container
+
 - name: Ensure index ownership inside php container
   community.docker.docker_container_exec:
     container: "{{ web_php_fpm_container_name }}"
@@ -122,7 +164,7 @@
       sh -c "if [ -f {{ web_php_web_root }}/index.php ];
       then chown {{ web_container_user }}:{{ web_container_user }} {{ web_php_web_root }}/index.php; fi
       && if [ -f {{ web_php_web_root }}/healthz.php ];
-      then chown {{ web_container_user }}:{{ web_container_user }} {{ web_php_web_root }}/healthz.php; fi"
+      then chown {{ web_container_user }}:{{ web_container_user }} {{ web_php_web_root }}/healthz.php; fi; true"
   changed_when: false
 
 - name: Check nginx configuration

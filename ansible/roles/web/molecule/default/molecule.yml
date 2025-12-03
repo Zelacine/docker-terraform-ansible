@@ -5,25 +5,20 @@ driver:
   name: docker
 platforms:
   - name: instance
-    image: docker:dind
+    image: ubuntu:22.04  # Add this - base image for the Dockerfile
+    dockerfile: Dockerfile.j2
     privileged: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: dockerd-entrypoint.sh
-    pre_build_image: true
+    pre_build_image: false
 provisioner:
   name: ansible
   inventory:
     host_vars:
       instance:
         ansible_connection: docker
-        ansible_user: root
   playbook: converge.yml
-  config_options:
-    defaults:
-      remote_user: root
 verifier:
   name: testinfra
   options:
     v: 1
-

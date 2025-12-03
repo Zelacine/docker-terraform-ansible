@@ -38,3 +38,7 @@ terraform.rc
 
 
 ansible/ansible.cfg
+.venv/
+*.venv/
+.env
+.env.local  

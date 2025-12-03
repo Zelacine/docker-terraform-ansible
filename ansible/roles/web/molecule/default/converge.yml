@@ -7,74 +7,75 @@
     web_project_name: php-app-test
     web_app_env: test
     web_project_root: /tmp/test-project
-    web_nginx_conf_host_path: /tmp/test-project/nginx.conf
+    web_php_pm: dynamic
+  
   pre_tasks:
-    - name: Install Docker CLI in test container
-      apk:
-        name: docker-cli
+    - name: Install Docker Python library
+      apt:
+        name: python3-docker
         state: present
-      when: ansible_os_family == "Alpine"
-
+        update_cache: yes
+    
     - name: Create test project directory
       file:
         path: "{{ web_project_root }}"
         state: directory
 
-    - name: Create test nginx.conf placeholder
-      copy:
-        content: "# Placeholder\n"
-        dest: "{{ web_nginx_conf_host_path }}"
-        mode: "0644"
-
     - name: Create test Docker network
-      command: >
-        docker network create {{ web_project_name }}-network
-      failed_when: false
-      changed_when: false
-
+      community.docker.docker_network:
+        name: "{{ web_project_name }}-network"
+        state: present
+    
     - name: Create test Docker volume
-      command: >
-        docker volume create {{ web_project_name }}-volume
-      failed_when: false
-      changed_when: false
-
+      community.docker.docker_volume:
+        name: "{{ web_project_name }}-volume"
+        state: present
+    
     - name: Start nginx test container
-      command: >
-        docker run -d
-        --name {{ web_project_name }}-nginx
-        --network {{ web_project_name }}-network
-        -v {{ web_project_name }}-volume:/var/www/html:ro
-        -v {{ web_nginx_conf_host_path }}:/etc/nginx/conf.d/default.conf:ro
-        -p 8080:80
-        nginx:alpine
-      register: nginx_container
-      changed_when: nginx_container.rc == 0
-
+      community.docker.docker_container:
+        name: "{{ web_project_name }}-nginx"
+        image: nginx:alpine
+        state: started
+        networks:
+          - name: "{{ web_project_name }}-network"
+        volumes:
+          - "{{ web_project_name }}-volume:/var/www/html:ro"
+        ports:
+          - "8080:80"
+        restart_policy: unless-stopped
+    
     - name: Start php-fpm test container
-      command: >
-        docker run -d
-        --name {{ web_project_name }}-php-fpm
-        --network {{ web_project_name }}-network
-        -v {{ web_project_name }}-volume:/var/www/html
-        -e APP_ENV={{ web_app_env }}
-        php:8.1-fpm-alpine
-      register: php_container
-      changed_when: php_container.rc == 0
-
+      community.docker.docker_container:
+        name: "{{ web_project_name }}-php-fpm"
+        image: php:8.2-fpm
+        state: started
+        networks:
+          - name: "{{ web_project_name }}-network"
+        volumes:
+          - "{{ web_project_name }}-volume:/var/www/html"
+        env:
+          APP_ENV: "{{ web_app_env }}"
+        restart_policy: unless-stopped
+    
     - name: Wait for containers to be ready
       wait_for:
         timeout: 10
-
-  roles:
-    - role: web
-
+  
+  tasks:
+    - name: Include web role tasks
+      include_tasks: ../../tasks/main.yml
+  
   post_tasks:
-    - name: Display container status
-      command: docker ps --filter "name={{ web_project_name }}"
-      register: container_status
-      changed_when: false
-
+    - name: Get container information
+      community.docker.docker_container_info:
+        name: "{{ item }}"
+      loop:
+        - "{{ web_project_name }}-nginx"
+        - "{{ web_project_name }}-php-fpm"
+      register: container_info
+    
     - name: Show container status
       debug:
-        var: container_status.stdout_lines
-
+        msg: "{{ item.container.Name }} is {{ item.container.State.Status }}"
+      loop: "{{ container_info.results }}"
+      when: item.container is defined

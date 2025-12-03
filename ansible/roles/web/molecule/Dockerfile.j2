@@ -1,0 +1,20 @@
+# Molecule managed
+
+{% if item.registry is defined %}
+FROM {{ item.registry.url }}/{{ item.image }}
+{% else %}
+FROM {{ item.image }}
+{% endif %}
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y \
+    python3 \
+    python3-apt \
+    docker.io \
+    sudo \
+    bash \
+    && rm -rf /var/lib/apt/lists/*
+
+CMD ["/bin/bash", "-c", "while true; do sleep 30; done"]
