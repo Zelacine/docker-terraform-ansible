@@ -38,13 +38,12 @@ module "php_fpm" {
 module "nginx" {
   source = "./modules/nginx-container"
 
-  project_name    = var.project_name
-  network_name    = module.network.network_name
-  volume_name     = module.volume.volume_name
-  host_port       = var.host_port
-  app_env         = var.app_env
-  php_fpm_name    = module.php_fpm.container_name
-  nginx_conf_path = abspath("${path.root}/nginx.conf")  
+  project_name = var.project_name
+  network_name = module.network.network_name
+  volume_name  = module.volume.volume_name
+  host_port    = var.host_port
+  app_env      = var.app_env
+  php_fpm_name = module.php_fpm.container_name
 
   providers = {
     docker = docker

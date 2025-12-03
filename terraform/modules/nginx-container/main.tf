@@ -19,12 +19,6 @@ resource "docker_container" "nginx" {
     read_only      = true
   }
 
-  volumes {
-    host_path      = var.nginx_conf_path
-    container_path = "/etc/nginx/conf.d/default.conf"
-    read_only      = true
-  }
-
   ports {
     internal = 80
     external = var.host_port

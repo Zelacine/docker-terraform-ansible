@@ -28,11 +28,6 @@ variable "php_fpm_name" {
   type        = string
 }
 
-variable "nginx_conf_path" {
-  description = "Path to nginx.conf file"
-  type        = string
-}
-
 variable "image_name" {
   description = "Nginx Docker image"
   type        = string
