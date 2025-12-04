@@ -108,7 +108,7 @@ http://localhost:8080/healthz-php
 
 
 
-[32 tools called]
+[32]
 
 ## Containers via Terraform, Config via Ansible
 - `terraform/main.tf` and `terraform/modules/nginx-container/*` no longer mount host config files; Terraform now just provisions the Docker network, shared volume, and nginx/php-fpm containers. The old `terraform/nginx.conf` file was removed.
