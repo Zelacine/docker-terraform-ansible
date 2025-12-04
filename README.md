@@ -1,6 +1,112 @@
 # sysadmin-infra-homework
 
 
+# Running Docker for Nginx + PHP-FPM, Terraform, Ansible on localhost
+
+This repository is a **template** for completing the test assignment. Full description is in [INSTRUCTIONS.md](./INSTRUCTIONS.md).
+
+## What's already included
+- Directory structure for Terraform/Ansible.
+- Basic GitHub Actions workflows: `terraform.yml`, `ansible.yml`.
+- Template files for `web` role (Ansible) and minimal Terraform configs.
+
+## What the candidate needs to implement (briefly)
+1. **Terraform**: describe `nginx` and `php-fpm` containers (docker provider), network and volume, variables and outputs.
+2. **Ansible**: `web` role should deploy Nginx config, index.php, enable `nginx` and `php-fpm`, add logrotate.
+3. Clean up and complete workflows (fmt/validate/plan + ansible-lint), optionally add Molecule tests for the role.
+4. **README**: complete the steps below for running and testing (see "Local Run" section).
+
+---
+
+## Local Run
+
+Your change in ansible: roles/web/defaults/main.yml 
+should have the same name as in terraform.tvars
+example:
+```
+terraform: terraform.tfvars
+project_name = "php-app-my"
+ansible roles/web/defaults/main.yml 
+web_project_name: php-app-my
+```
+### Start terraform 
+
+```
+# example
+cd /terraform
+terraform init
+terraform fmt -check
+terraform validate
+terraform plan 
+terraform apply -auto-approve
+```
+#### Outputs:
+```
+# example
+app_url = "http://localhost:8080/"
+healthz_url = "http://localhost:8080/healthz"
+network_name = "php-app-my-network"
+nginx_container_name = "php-app-my-nginx"
+php_fpm_container_name = "php-app-my-php-fpm"
+volume_name = "php-app-my-volume"
+```
+
+
+### Start ansible
+
+```
+cd /ansible
+```
+**Missing Docker modules**
+ 'community.docker.docker_container_copy' and the other Docker modules come from the 'community.docker' collection. Install it once on your control machine:
+```bash   
+   ansible-galaxy collection install community.docker
+```    
+Add a tiny inventory and point the playbook at it, e.g. create ansible/inventory containing:
+```bash
+   [local]
+   localhost ansible_connection=local
+```
+Then run syntax check ansible playbook:
+```bash
+   ansible-playbook -i inventory --syntax-check playbook.yml
+```
+Validation ansible lint:
+```bash
+   ansible-lint playbook.yml
+# example out
+Passed: 0 failure(s), 0 warning(s) on 4 files. Last profile that met the validation criteria was 'production'.
+
+```  
+   
+(No sudo needed unless your Ansible is installed system wide.) If you prefer project-local collections, run that command inside the project and set `ANSIBLE_COLLECTIONS_PATHS` or add to `ansible.cfg`.
+
+Run ansible-playbook:
+```bash
+   ansible-playbook -i inventory  playbook.yml
+```
+
+
+
+### Status Check
+```
+curl http://localhost:8080/healthz
+# expected JSON:
+# {"status":"ok","service":"nginx","env":"dev"}
+```
+### Staus Check php-fpm service
+```
+http://localhost:8080/healthz-php
+# expected JSON:
+# {"status":"ok","service":"php-fpm","env":"dev","php_version":"8.2.29","timestamp":"2025-11-25T08:29:30+00:00"}
+```
+
+## CI/CD
+- **Actions** tab should be green: Terraform (fmt/validate/plan) and ansible-lint pass.
+- Attach screenshots or links to successful runs:
+
+
+
 
 [32 tools called]
 
@@ -34,4 +140,4 @@ or rely on the defaults for dynamic mode (`pm.start_servers`, `pm.min_spare_serv
 2. Re-run `ansible-lint` / Molecule if you use them (`ansible-galaxy collection install community.docker` first).
 3. Apply Terraform, then run `ansible-playbook ansible/playbook.yml` with the desired `web_php_pm` settings to push configs.
 
-That separation now matches your requirement: Terraform “lifts” the containers/network/volume, while Ansible owns all configuration, including the new PHP-FPM static/dynamic pool control.
+
